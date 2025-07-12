@@ -1,0 +1,110 @@
+//DEFINIÇÃO DE BIBLIOTECAS.
+#include <HCSR04.h>
+#include <Servo.h>
+
+
+//DEFINIÇÃO DE PINOS E PARÂMETRO DE TEMPO PARA O SENSOR.
+#define trig1 7
+#define trig2 3
+#define ec1 8
+#define ec2 4
+
+
+//TEMPO DE ATUALIZAÇÃO DA FUNÇÃO MONITORA.
+#define tmpAt 5000 
+
+
+//INSTANCIANDO OBJETOS.
+Servo serv;
+HCSR04 ultraCap(trig1, ec1);
+HCSR04 ultraMao(trig2, ec2);
+
+
+//DEFINIÇÃO DE VARIÁVEIS PARA AS DISTÂNCIAS DOS SENSORES, ÂNGULO DO SERVO, CAPACIDADE ATUAL DA LIXEIRA E A DISTÂNCIA MÁXIMA LIDA NO PRIMEIRO PULSO.
+float distMao, distCap, angulo, distmax, valor0, valor25, valor50, valor75;
+
+
+//FUNÇÃO SERVO: ABRE E FECHA A TAMPA DEPENDENDO DA DISTÂNCIA QUE A MÃO ESTEJA DO SENSOR 2, O ULTRAMÃO.
+void servo(){
+  angulo = 180; /*NO MEU PROJETO, O SERVO FICA POSICIONADO DE UMA FORMA QUE O TRAJETO MAIS CONVENCIONAL É ROTACIONAR DE 180° ATÉ 0°, SENDO O 180° O MARCO 0, 
+  E O 0° O FIM, ONDE A TAMPA JÁ ESTÁ DEVIDAMENTE LEVANTADA.*/
+  serv.write(angulo);
+  if(distMao < 12){
+    angulo = 0;
+    serv.write(angulo);
+    delay(3000);
+  }
+  else {
+    angulo = 180;
+    serv.write(angulo);
+    delay(1500);
+  }
+}
+/*FUNÇÃO MONITORA: ANALISA E AVALIA O NÍVEL DO LIXO PRESENTE E USA A VARIÁVEL DISTMAX PARA ESTABELECER, A CADA ESGOTAMENTO, QUAL SERÁ A ALTURA DA BASE
+DA LIXEIRA ATÉ O SENSOR. EM OUTRAS PALAVRAS, A PROFUNDIDADE. A PARTIR DAÍ, ESSA ALTURA É FRACIONADA E CONDICIONADA POR PADRÕES JÁ ESTABELECIDOS:
+0% (LIXEIRA VAZIA), 25% (LIXEIRA A 25% DA CAPACIDADE MÁXIMA), 50% (LIXEIRA A 50% DA CAPACIDADE MÁXIMA), 75% (LIXEIRA A 75% DA CAPACIDADE MÁXIMA) E 100% (LIXEIRA CHEIA).
+DESSA FORMA, PODE-SE USAR ESSE ALGORITMO PARA FUNCIONAR EM QUALQUER LIXEIRA, INDEPENDENTEMENTE DE QUAL SEJA A ALTURA. POR QUESTÕES ORGANIZACIONAIS,
+O ARDUINO ENVIA O NÚMERO QUE REPRESENTA O NÍVEL DO LIXO E LOGO APÓS O TEXTO DE ATUALIZAÇÃO, SEMPRE COM UM PONTO E VÍRGULA ENTRE TAIS INFORMAÇÕES,
+UMA VEZ QUE, NO MEU PROTÓTIPO, O ESP FOI CONFIGURADO PARA TRATAR AS INFORMAÇÕES RECEBIDAS USANDO ESTA FORMATAÇÃO.*/
+
+void monitora(){
+ if(distCap >= valor0){ 
+    Serial.print("0");
+    Serial.print(';');    
+    Serial.print("Lixeira vazia."); 
+    Serial.print(';');    
+    delay(tmpAt);
+  }
+  if(distCap < valor0 and distCap > valor25){
+    Serial.print("25");
+    Serial.print(';');    
+    Serial.print("Um quarto da capacidade máxima.");
+    Serial.print(';');    
+    delay(tmpAt);
+  }
+  if(distCap < valor25 and distCap > valor50){   
+    Serial.print("50");
+    Serial.print(';');    
+    Serial.print("Metade da capacidade máxima.");
+    Serial.print(';');    
+    delay(tmpAt);      
+    }
+  if(distCap < valor50 and distCap > valor75){   
+    Serial.print("75");
+    Serial.print(';');    
+    Serial.print("Próximo da capacidade máxima!");
+    Serial.print(';');    
+    delay(tmpAt);      
+    }    
+  if(distCap <= valor75){   
+    Serial.print("100");
+    Serial.print(';');    
+    Serial.print("Lixeira cheia. Solicite o esvaziamento!");    
+    Serial.print(';');    
+    delay(tmpAt);      
+    }    
+}    
+
+
+void setup() {
+  Serial.begin(9600); //INICIA A COMUNIÇÃO SERIAL ENTRE O ARDUINO E ESP-01.
+  serv.attach(6); //DEFINE O PINO QUE O SERVO ESTÁ CONECTADO.
+  distmax = (ultraCap.dist()); /*VARIÁVEL DISTMAX RECEBE O PRIMEIRO E ÚNICO PULSO QUE O SENSOR CAPACIDADE DISPARA, SENDO NECESSÁRIO NESTA ETAPA PARA ESTABELECER
+  A PROFUNDIDADE DA LIXEIRA SEMPRE QUE O SISTEMA INICIA */
+
+  valor75 = (distmax*3)/10; /*É PRECISO UMA FOLGA DE PELO MENOS 5 CM DE LEITURA MÍNIMA DO ULTRASSONICO, DEVIDO O MESMO NAO SER TOTALMENTE PRECISO.
+  ESSA É UMA FORMA DO LIXO DO NAO ENCOSTAR NO SENSOR NEM CAUSAR UMA LEITURA ERRONHA. NO PROJETO, A LIXEIRA USADA MEDE 20 CM DE PROFUNDIDADE, 
+  OU SEJA, 20 X 0,3 = 6, ESTES 6 CM SERÃO O LIMITE QUE O LIXO PODE CHEGAR DE DISTANCIA DO SENSOR SEM PREJUDICA-LO.*/
+  valor50 = (distmax*4)/10;
+  valor25 = (distmax*6)/10;
+  valor0 = (distmax*8)/10;
+  delay(1200); // TEMPO DE ESPERA INICIAL APENAS PARA NAO INICAR AS VARIAVES ANTERIORES IMEDIATAMENTE NO LOOP, PODENDO COMEÇAR AFIRMANDO LIXEIRA CHEIA, POR EXEMPLO.
+}
+
+
+void loop() {
+distCap = ultraCap.dist(); //ESTE COMANDO .DIST É USADO PARA SE OBTER A DISTANCIA QUE CADA ULTRASSONICO PROCESSA. ATRIBUÍ-LOS PARA ESSAS VARÍAVEIS POR COMODIDADE E ORGANIZAÇÃO DO CODIGO. 
+distMao = ultraMao.dist();
+monitora();
+servo();
+}
